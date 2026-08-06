@@ -1,0 +1,5 @@
+{
+  "variant": "tta_only",
+  "source_checkpoint": "checkpoints\\final_combined_optimal.pth",
+  "saved_checkpoint": "results\\tta_only_final_combined_optimal.pth"
+}

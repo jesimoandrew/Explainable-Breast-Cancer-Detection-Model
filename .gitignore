@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+cbis_ddsm/
+cbis_ddsm_png/
+cbis-ddsm-cache/
+cbis-ddsm-cache-indexed/
+
+# Model weights / checkpoints (too large for git)
+*.pt
+*.pth
+

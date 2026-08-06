@@ -1,0 +1,7 @@
+experiment,head_lr,backbone_lr,weight_decay,scheduler,optimizer,loss,best_epoch,epochs_run,best_val_loss,best_val_accuracy,training_time_sec,checkpoint_path,augmentation,loss_variant
+phase1_lr_1e-04,0.0001,1e-05,0.0001,plateau,adamw,CrossEntropyLoss,12,20,0.45126548409461975,0.8048780487804879,1051.8,checkpoints\phase1_lr_1e-04.pth,,
+phase2_wd_1e-05,0.0001,1e-05,1e-05,plateau,adamw,CrossEntropyLoss,12,20,0.45126548409461975,0.8048780487804879,1453.9,checkpoints\phase2_wd_1e-05.pth,,
+phase3_sched_plateau,0.0001,1e-05,1e-05,plateau,adamw,CrossEntropyLoss,12,20,0.45126548409461975,0.8048780487804879,1171.6,checkpoints\phase3_sched_plateau.pth,,
+phase4_aug_baseline,0.0001,1e-05,1e-05,plateau,adamw,CrossEntropyLoss,12,20,0.45126548409461975,0.8048780487804879,1405.6,checkpoints\phase4_aug_baseline.pth,baseline,
+phase5_loss_ce_unweighted,0.0001,1e-05,1e-05,plateau,adamw,CrossEntropyLoss,12,20,0.45126548409461975,0.8048780487804879,925.4,checkpoints\phase5_loss_ce_unweighted.pth,,ce_unweighted
+phase6_opt_adamw,0.0001,1e-05,1e-05,plateau,adamw,CrossEntropyLoss,12,20,0.45126548409461975,0.8048780487804879,1207.4,checkpoints\phase6_opt_adamw.pth,,

@@ -1,0 +1,9 @@
+{
+  "head_lr": 0.0001,
+  "backbone_lr": 1e-05,
+  "weight_decay": 1e-05,
+  "scheduler": "plateau",
+  "augmentation": "baseline",
+  "loss": "ce_unweighted",
+  "optimizer": "adamw"
+}
