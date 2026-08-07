@@ -13,6 +13,7 @@ cbis_ddsm/
 cbis_ddsm_png/
 cbis-ddsm-cache/
 cbis-ddsm-cache-indexed/
+cbis-ddsm-cache-hires/
 
 # Model weights / checkpoints (too large for git)
 *.pt
