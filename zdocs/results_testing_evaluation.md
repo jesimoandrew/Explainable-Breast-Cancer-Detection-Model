@@ -1,6 +1,6 @@
 # Chapter 4 (Excerpt): Results Presentation, Testing, and Evaluation
 
-> Scope note: This document presents **Experiment 1 — Hi-Res Single-Input Architecture Comparison and Grad-CAM Interpretability Validation** only. All numbers, tables, and figures below are pulled directly from the experiment's saved result files (`notebooks/experiment_1_baseline/results/` and `notebooks/explainability/results/` and `figures/`), not re-derived or estimated. Sections for **Experiment 2 (Hyperparameter Optimization)** are left as placeholders for a later pass.
+> Scope note: This document presents **Experiment 1 — Hi-Res Single-Input Architecture Comparison** only, restricted to classification model performance. All numbers, tables, and figures below are pulled directly from the experiment's saved result files (`notebooks/experiment_1_baseline/results/`), not re-derived or estimated. Sections for **Experiment 2 (Hyperparameter Optimization)** are left as placeholders for a later pass.
 
 ---
 
@@ -8,27 +8,30 @@
 
 ### 4.2.1 System Output
 
-The deployed system takes a single full mammogram image (any resolution) and produces two outputs: **(1)** a malignancy probability from the classifier, and **(2)** a Grad-CAM heatmap showing which regions of the image drove that prediction. No cropped lesion patch or segmentation mask is required at this stage — both are training-time-only signals (see [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), §4.1).
+The deployed system takes a single full mammogram image (any resolution) and outputs a **malignancy probability** — the classifier's softmax score for the malignant class. A probability ≥ 0.5 is treated as a positive (malignant) prediction. No cropped lesion patch or segmentation mask is required at inference; both are training-time-only signals (see [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md), §4.1).
 
-Figures 4.1 and 4.2 show representative, unedited system output on five held-out test cases (three malignant, two benign) for the two architectures at opposite ends of the interpretability ranking established in §4.2.2: DenseNet121 (highest classification accuracy) and VGG-16 (highest localization quality).
+Table 4.1 below shows unedited, representative system output on eight held-out test-set cases for the best-performing architecture (DenseNet121), sampled to cover all four prediction outcomes: correctly flagged malignant cases, correctly cleared benign cases, and both error types (false positive, false negative). Values are read directly from the model's saved test-set prediction file (`testprobs_hires_control_gap_a0.5_densenet121.npz`).
 
-**Figure 4.1.** Grad-CAM output for DenseNet121 on five test cases, columns left to right: original mammogram, mammogram with expert ROI outline overlaid, Grad-CAM heatmap alone, and heatmap + ROI combined.
-![DenseNet121 Grad-CAM sample output](../notebooks/explainability/figures/batch_1/gradcam_overlay_grid_densenet121.png)
+**Table 4.1.** Sample system output, DenseNet121, held-out test set (n = 319 total; 8 representative cases shown).
 
-**Figure 4.2.** Same five test cases and layout as Figure 4.1, for VGG-16.
-![VGG-16 Grad-CAM sample output](../notebooks/explainability/figures/batch_1/gradcam_overlay_grid_vgg16.png)
+| Test sample | Predicted probability (malignant) | Predicted class | True class | Outcome |
+|---|---|---|---|---|
+| #1 | 0.6449 | Malignant | Malignant | Correct (true positive) |
+| #14 | 0.5027 | Malignant | Malignant | Correct (true positive) |
+| #4 | 0.0622 | Benign | Benign | Correct (true negative) |
+| #5 | 0.0622 | Benign | Benign | Correct (true negative) |
+| #3 | 0.6483 | Malignant | Benign | **Incorrect (false positive)** |
+| #19 | 0.5780 | Malignant | Benign | **Incorrect (false positive)** |
+| #2 | 0.4694 | Benign | Malignant | **Incorrect (false negative)** |
+| #18 | 0.3199 | Benign | Malignant | **Incorrect (false negative)** |
 
-Reading these outputs qualitatively:
-
-- **Row 1 (malignant, p=0.65 / p=0.40):** both architectures place heat near the annotated lesion, but DenseNet121 also lights up a large, unrelated region at the bottom of the breast — extra activation that is not wrong for the classification decision (GAP pooling only needs *some* discriminative signal) but would mislead a clinician using the heatmap as a location cue.
-- **Row 3 (malignant, p=0.50 / p=0.54):** VGG-16's heatmap stays largely dark/cool over the annotated lesion — a localization miss despite a correct classification, illustrating why accuracy and interpretability must be measured separately rather than assumed to move together.
-- **Row 5 (benign, correctly scored low at p=0.06):** both architectures peak on the laterality marker text ("L CC") burned into the corner of the image rather than on breast tissue. This is a genuine failure mode — the network is latching onto a non-anatomical artifact — and is exactly the kind of error that only becomes visible through explainability tooling, not through accuracy alone. It directly motivates the quantitative "peak-in-padding" and pixel-level localization checks reported in §4.2.2.
+Two things are worth noting directly from this sample: first, both false-negative cases (#2, #18) sit closer to the 0.5 decision boundary (0.47, 0.32) than the false positives do, which is consistent with the model's sensitivity (72.5%) trailing its specificity (77.4%, Table 4.2) — it is more prone to *under*-calling borderline malignant cases than over-calling benign ones. Second, of the 319 test cases, 100 were true positives, 140 true negatives, 41 false positives, and 38 false negatives, which reconstructs the reported accuracy exactly: (100 + 140) / 319 = 0.7524.
 
 ### 4.2.2 Data Visualization
 
-**Classification performance.** All four architectures were trained under an identical recipe (384×640 input, batch size 8, seed 42, GAP pooling, distillation α = 0.5) and evaluated on the same held-out 319-image test split.
+All four architectures were trained under an identical recipe (384×640 input, batch size 8, seed 42, GAP pooling, distillation α = 0.5) and evaluated on the same held-out 319-image test split.
 
-**Table 4.1.** Single-input (deployable) classification performance by architecture, with bootstrap 95% confidence intervals (2000 resamples).
+**Table 4.2.** Single-input (deployable) classification performance by architecture, with bootstrap 95% confidence intervals (2000 resamples).
 
 | Architecture | Accuracy [95% CI] | AUC-ROC [95% CI] | Sensitivity | Specificity |
 |---|---|---|---|---|
@@ -37,27 +40,8 @@ Reading these outputs qualitatively:
 | EfficientNet-B2 | 0.7147 [0.664, 0.765] | 0.8133 [0.767, 0.858] | 0.6957 | 0.7293 |
 | ResNet-50 | 0.7022 [0.652, 0.749] | 0.7939 [0.744, 0.840] | 0.6884 | 0.7127 |
 
-**Figure 4.3.** Accuracy, AUC-ROC, sensitivity, and specificity by architecture (same data as Table 4.1).
+**Figure 4.1.** Accuracy, AUC-ROC, sensitivity, and specificity by architecture (same data as Table 4.2).
 ![Classification metrics by architecture](../notebooks/experiment_1_baseline/results/hires_metrics_by_architecture_control_gap.png)
-
-**Interpretability / localization performance.** Grad-CAM heatmaps were scored against the expert-annotated ROI masks on the same 319-image test set using the metrics defined in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) §4.3: **energy concentration** (fraction of heatmap "mass" falling inside the lesion mask), **concentration ratio** (energy concentration ÷ chance rate — the primary, threshold-free metric), the **pointing game** (does the single hottest pixel land inside the mask?), and pixel-level **AP/AUROC** (treating the heatmap as a per-pixel malignancy score).
-
-**Table 4.2.** Grad-CAM localization quality by architecture (n = 319 test images).
-
-| Architecture | Concentration ratio (×chance) | Pointing game | Energy concentration | Pixel AP | Pixel AUROC | Peak-in-padding |
-|---|---|---|---|---|---|---|
-| **VGG-16** | **5.92×** [4.91, 7.05] | 16.93% | 4.74% | 0.152 | 0.661 | 2.51% |
-| ResNet-50 | 4.26× [3.56, 4.97] | 9.09% | 3.66% | 0.090 | 0.655 | 1.25% |
-| EfficientNet-B2 | 3.38× [2.86, 3.95] | 8.78% | 3.20% | 0.075 | 0.621 | 1.57% |
-| DenseNet121 | 2.74× [2.28, 3.26] | 9.72% | 2.72% | 0.097 | 0.611 | 1.88% |
-
-**Figure 4.4.** Left: distribution of per-image concentration ratio by architecture (box plot; dashed line = chance level, 1×). Right: IoU between the thresholded heatmap and the ROI mask as the threshold τ varies, on a 60-image illustrative subsample.
-![Localization summary](../notebooks/explainability/figures/localization_summary.png)
-
-**Figure 4.5.** Per-image concentration-ratio distribution split by ground-truth class (malignant vs. benign), by architecture.
-![Localization by class per architecture](../notebooks/explainability/figures/localization_by_class_per_arch.png)
-
-> **Note on Figure 4.4 (right panel):** the IoU-vs-threshold curve is computed on a 60-image subsample for visualization cost reasons and should be read as illustrative only. It shows DenseNet121 with a higher IoU across most thresholds than Table 4.2's full-sample (n=319) concentration-ratio ranking would suggest — a reminder that IoU is threshold-dependent and more sample-sensitive than the threshold-free concentration ratio, which is why concentration ratio (not IoU) is used as the primary, statistically-tested metric in this thesis (§4.2.3).
 
 **Deployability comparison (single-input vs. dual-input).** Table 4.3 restates the core deployability result from [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) §5: how much accuracy is given up by dropping the ground-truth lesion crop at inference time.
 
@@ -70,14 +54,14 @@ Reading these outputs qualitatively:
 | EfficientNet-B2 | 0.7147 | 0.7743 | −0.0596 [−0.122, +0.003] | 0.064 |
 | ResNet-50 | 0.7022 | 0.7210 | −0.0188 [−0.075, +0.038] | 0.598 |
 
-**Figure 4.6.** Left: test accuracy of the dual-input (non-deployable) model vs. the single-input model at the old 224² cache vs. the current 384×640 cache, against the majority-class floor. Center: accuracy gap lost by dropping the crop. Right: validation ROC-AUC training curves for all four single-input architectures.
+**Figure 4.2.** Left: test accuracy of the dual-input (non-deployable) model vs. the single-input model at the old 224² cache vs. the current 384×640 cache, against the majority-class floor. Center: accuracy gap lost by dropping the crop. Right: validation ROC-AUC training curves for all four single-input architectures.
 ![Hi-res vs dual-input comparison](../notebooks/experiment_1_baseline/results/hires_comparison_control_gap.png)
 
 All four McNemar p-values are ≥ 0.05: **no architecture shows a statistically detectable accuracy loss from dropping the crop.** This null result is the central quantitative evidence for the thesis's deployability argument.
 
 ### 4.2.3 Performance Metrics
 
-Table 4.4 summarizes the headline accuracy/AUC metrics from Table 4.1 alongside compute cost (wall-clock training time to convergence) as a proxy for computational demand — the resource dimension actually measured in this experiment.
+Table 4.4 summarizes the headline accuracy/AUC metrics from Table 4.2 alongside compute cost (wall-clock training time to convergence) as a proxy for computational demand — the resource dimension actually measured in this experiment.
 
 **Table 4.4.** Classification performance and training compute cost by architecture.
 
@@ -98,19 +82,19 @@ DenseNet121 achieves the best accuracy/AUC but at roughly **2× the training cos
 
 ### 4.3.1 Testing Approach
 
-Because this is a machine-learning system rather than a conventional application, "testing" is adapted from the standard unit/integration/system/acceptance hierarchy into an ML-appropriate equivalent: correctness checks on the *data* (leakage, alignment), correctness checks on the *model plumbing* (architecture shape assertions, sanity baselines), evaluation on a *held-out system-level test set*, and *statistical acceptance criteria* rather than pass/fail thresholds alone.
+Because this is a machine-learning system rather than a conventional application, "testing" is adapted from the standard unit/integration/system/acceptance hierarchy into an ML-appropriate equivalent: correctness checks on the *data* (leakage, alignment), correctness checks on the *model plumbing* (architecture shape assertions), evaluation on a *held-out system-level test set*, and *statistical acceptance criteria* rather than pass/fail thresholds alone.
 
 ```mermaid
 flowchart TD
-    A["Data-integrity testing\n(patient-level leakage checks,\nimage/mask path resolution)"] --> B["Model unit validation\n(spatial-shape assertions,\nrandom-init Grad-CAM control)"]
+    A["Data-integrity testing\n(patient-level leakage checks,\nimage path resolution)"] --> B["Model unit validation\n(backbone spatial-shape assertions)"]
     B --> C["System-level evaluation\n(held-out 319-image test set,\nnever used in training/tuning)"]
-    C --> D["Statistical acceptance testing\n(McNemar for deployability,\nWilcoxon + Holm-Bonferroni\nfor interpretability ranking)"]
+    C --> D["Statistical acceptance testing\n(McNemar test: single-input\nvs. dual-input, per architecture)"]
     D --> E{"Result"}
     E -->|"p >= 0.05"| F["No detectable cost -> deployable claim supported"]
-    E -->|"p < 0.05 after correction"| G["Real, significant difference -> reported as a finding"]
+    E -->|"p < 0.05"| G["Real, significant accuracy loss -> flagged"]
 ```
 
-**Figure 4.7.** Adapted testing pipeline used for Experiment 1.
+**Figure 4.3.** Adapted testing pipeline used for Experiment 1.
 
 ### 4.3.2 Test Cases and Scenarios
 
@@ -120,15 +104,12 @@ flowchart TD
 |---|---|---|---|---|---|
 | TC01 | Patient-level leakage check | Train/test patient ID sets after `StratifiedGroupKFold` split | Zero patient ID overlap between splits | Zero overlap confirmed | Pass |
 | TC02 | Backbone spatial-shape assertion | Each of the 4 backbones' pre-pool feature map at 384×640 input | Feature map shape consistent with `feat_dim` and expected spatial resolution | Assertion passed for all 4 architectures | Pass |
-| TC03 | Grad-CAM sanity control | Untrained (random-weight) model, Grad-CAM run on a 40-image subsample | Concentration ratio ≈ chance (≈1×) — heatmap should carry no lesion signal before training | Near-chance concentration ratio observed, confirming Table 4.2's scores reflect learned features, not dataset geometry | Pass |
-| TC04 | Deployability equivalence — DenseNet121 | Single-input vs. dual-input predictions, 319-image test set | No significant accuracy gap (McNemar p ≥ 0.05) | p = 0.254 | Pass |
-| TC05 | Deployability equivalence — VGG-16 | same as TC04 | p ≥ 0.05 | p = 0.445 | Pass |
-| TC06 | Deployability equivalence — EfficientNet-B2 | same as TC04 | p ≥ 0.05 | p = 0.064 | Pass |
-| TC07 | Deployability equivalence — ResNet-50 | same as TC04 | p ≥ 0.05 | p = 0.598 | Pass |
-| TC08 | Interpretability ranking significance | Paired concentration-ratio scores per architecture, n=319, all 6 pairwise comparisons | Wilcoxon signed-rank + Holm-Bonferroni correction determines which architecture pairs differ significantly | All 6 pairs significant (p_holm from 6.6×10⁻³ to 1.9×10⁻⁹); full ranking VGG-16 > ResNet-50 > EfficientNet-B2 > DenseNet121 | Pass (informative result — see discussion below) |
-| TC09 | Heatmap-to-original-resolution round trip | Full-resolution test image of arbitrary aspect ratio, through `preprocess` → `GradCAM` → `cam_to_original` | Returned heatmap shape matches the *original* image's (H, W), not the internal 640×384 | Verified via `explain()` return-shape checks across the test set | Pass |
+| TC03 | Deployability equivalence — DenseNet121 | Single-input vs. dual-input predictions, 319-image test set | No significant accuracy gap (McNemar p ≥ 0.05) | p = 0.254 | Pass |
+| TC04 | Deployability equivalence — VGG-16 | same as TC03 | p ≥ 0.05 | p = 0.445 | Pass |
+| TC05 | Deployability equivalence — EfficientNet-B2 | same as TC03 | p ≥ 0.05 | p = 0.064 | Pass |
+| TC06 | Deployability equivalence — ResNet-50 | same as TC03 | p ≥ 0.05 | p = 0.598 | Pass |
 
-TC08 is the most consequential result in this table: it is a **statistically significant reversal** of the accuracy ranking in Table 4.1. DenseNet121, the most accurate architecture, is the *least* interpretable by every distance/overlap-based metric in Table 4.2; VGG-16, the second-most accurate, is the *most* interpretable. This is reported here as a genuine finding, not a test failure — it directly supports the thesis's premise that accuracy and explainability must be evaluated as separate axes rather than assumed to correlate.
+Every deployability test case (TC03–TC06) passes: across all four architectures, the accuracy gap between the deployable single-input model and its non-deployable dual-input counterpart is not statistically distinguishable from zero. This is the core quantitative support for treating the single-input model as production-ready.
 
 ### 4.3.3 Performance Evaluation
 
