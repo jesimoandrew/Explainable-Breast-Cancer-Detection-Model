@@ -1,0 +1,7 @@
+variant,threshold,metric,point_estimate,ci_low,ci_high
+crossover,0.485,accuracy,0.7429,0.6959,0.79
+crossover,0.485,sensitivity,0.7464,0.6692,0.8158
+crossover,0.485,specificity,0.7403,0.6765,0.8045
+high_sensitivity,0.305,accuracy,0.7618,0.7179,0.8088
+high_sensitivity,0.305,sensitivity,0.913,0.8607,0.958
+high_sensitivity,0.305,specificity,0.6464,0.5771,0.7143

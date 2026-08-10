@@ -1,0 +1,4 @@
+variant,threshold,accuracy,sensitivity,specificity,f1,roc_auc
+main,0.5,0.7524,0.7246,0.7735,0.7168,0.839
+crossover,0.485,0.7429,0.7464,0.7403,0.7153,0.839
+high_sensitivity,0.305,0.7618,0.913,0.6464,0.7683,0.839
