@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# Secrets -- holds the Supabase service_role key
+.env
+.env.local
+
 cbis_ddsm/
 cbis_ddsm_png/
 cbis-ddsm-cache/

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "cv>=1.0.0",
+    "fastapi>=0.141.1",
     "ipykernel>=7.3.0",
     "jupyter>=1.1.1",
     "matplotlib>=3.10.0",
@@ -14,11 +15,14 @@ dependencies = [
     "pandas>=3.0.3",
     "pillow>=11.0.0",
     "pydicom>=3.0.1",
+    "python-multipart>=0.0.32",
     "scikit-learn>=1.9.0",
     "streamlit>=1.61.1",
+    "supabase>=2.31.0",
     "torch==2.11.0",
     "torchvision>=0.20.0",
     "tqdm>=4.67.0",
+    "uvicorn[standard]>=0.52.1",
 ]
 
 [tool.uv.sources]

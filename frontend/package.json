@@ -1,0 +1,29 @@
+{
+  "name": "astrascan-ai-frontend",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "uv run --directory .. uvicorn app.server:app --port 8000 --reload --reload-dir app",
+    "dev:all": "concurrently -k -n api,ui -c magenta,cyan --handle-input \"npm:dev:api\" \"npm:dev\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^10.0.4",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.11",
+    "vite": "^5.4.2"
+  }
+}
