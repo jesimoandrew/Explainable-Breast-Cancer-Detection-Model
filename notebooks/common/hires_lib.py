@@ -604,6 +604,53 @@ def iou_at(cam, mask, valid, tau):
     return float((b & m).sum() / union) if union else float("nan")
 
 
+def dice_at(cam, mask, valid, tau):
+    """Sorensen-Dice of the tau-thresholded CAM against the ROI.
+
+    Dice and IoU are the SAME ordering per image -- Dice = 2*IoU/(1+IoU) exactly, because
+    |A|+|B| = |A union B| + |A intersect B|. Both are reported because both are conventional in the
+    segmentation literature, not because they are independent evidence. Their MEANS over a dataset
+    do differ (the transform is nonlinear), so the two columns are not redundant as summaries, but
+    a per-image win for one is always a win for the other.
+    """
+    b = (np.asarray(cam) >= tau) & valid
+    m = np.asarray(mask).astype(bool) & valid
+    tot = b.sum() + m.sum()
+    return float(2 * (b & m).sum() / tot) if tot else float("nan")
+
+
+def overlap_sweep(cam, mask, valid, taus):
+    """IoU and Dice at every tau in `taus`, in a single pass. Returns {"tau", "iou", "dice"} arrays.
+
+    Sorting the valid CAM values once and locating each tau with searchsorted is far cheaper than
+    re-thresholding a 640x384 array per tau -- the grid is swept for every image, every
+    architecture and both splits, so the naive version dominates the runtime.
+
+    Equivalent to calling iou_at/dice_at in a loop; `test_overlap_sweep_matches_naive` in the
+    notebook asserts that equivalence rather than trusting it.
+    """
+    valid = np.asarray(valid).astype(bool)
+    v = np.asarray(cam, dtype=np.float64)[valid]
+    m = np.asarray(mask).astype(bool)[valid]
+    order = np.argsort(v, kind="stable")
+    vs = v[order]
+    # cum_m[i] = lesion pixels among the i COLDEST values, so the lesion pixels at or above a
+    # threshold sitting at index i is simply M - cum_m[i].
+    cum_m = np.concatenate([[0], np.cumsum(m[order])])
+    M, n = int(m.sum()), int(vs.size)
+
+    taus = np.asarray(taus, dtype=np.float64)
+    idx = np.searchsorted(vs, taus, side="left")
+    b_n = n - idx                                  # |predicted positive|
+    inter = M - cum_m[idx]                         # |predicted positive AND lesion|
+    union = b_n + M - inter
+    tot = b_n + M
+    with np.errstate(invalid="ignore", divide="ignore"):
+        iou = np.where(union > 0, inter / np.maximum(union, 1), np.nan)
+        dice = np.where(tot > 0, 2 * inter / np.maximum(tot, 1), np.nan)
+    return {"tau": taus, "iou": iou.astype(np.float64), "dice": dice.astype(np.float64)}
+
+
 # --------------------------------------------------------------------------------------
 # Memory probe
 # --------------------------------------------------------------------------------------

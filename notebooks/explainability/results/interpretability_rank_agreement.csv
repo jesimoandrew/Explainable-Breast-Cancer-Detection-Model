@@ -1,0 +1,5 @@
+,Dice,IoU,pointing_hit,pointing_hit_tol,concentration_ratio,pixel_ap,pixel_auroc,peak_dist_px,mean_rank
+densenet121,4,4,2,4,4,2,4,4,3.5
+efficientnet_b2,2,3,4,3,3,4,3,1,2.875
+resnet50,3,2,3,2,2,3,2,2,2.375
+vgg16,1,1,1,1,1,1,1,3,1.25
