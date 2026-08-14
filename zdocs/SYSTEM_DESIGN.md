@@ -38,7 +38,7 @@ flowchart LR
     end
 ```
 
-**Why this two-stage teacher/student design?** A model that also sees the cropped lesion has an easier job — the crop tells it *where to look*. Distillation lets the single-input student borrow some of that advantage during training (via the teacher's soft probability outputs) without needing the crop at inference time. The final report (`notebooks/experiment_1_baseline/results/final_report.md`) confirms this works: the deployable single-input DenseNet121 scores 0.7524 accuracy / 0.8390 AUC versus the non-deployable dual-input teacher's 0.7868 / 0.8655 — a gap that is **not** statistically significant (McNemar p = 0.254), meaning the crop can be dropped at inference for no detectable cost.
+**Why this two-stage teacher/student design?** A model that also sees the cropped lesion has an easier job — the crop tells it *where to look*. Distillation lets the single-input student borrow some of that advantage during training (via the teacher's soft probability outputs) without needing the crop at inference time. The final report (`notebooks/experiment_1_baseline/results/final_report.md`) confirms this works: the deployable single-input DenseNet121 scores 0.7524 accuracy / 0.8390 AUC versus the non-deployable dual-input teacher's 0.7868 / 0.8655 — a gap whose paired 95% confidence interval, [−0.088, +0.019], spans zero, meaning the crop can be dropped at inference for no detectable cost.
 
 ---
 
@@ -423,7 +423,7 @@ def localization_metrics(cam, mask, valid, tolerance_px=15):
 
 The **concentration ratio** is the primary metric: a value of, say, 3.0 means the heatmap puts three times more of its attention on the lesion than a heatmap that ignored the image and just guessed randomly would. As a sanity check, the same metrics are computed for an **untrained, randomly-initialized** model — it should (and does) score close to a ratio of 1.0×, confirming the metric measures something the *trained* model learned, not an artifact of the dataset's geometry.
 
-Architectures are ranked on this metric using a paired, non-parametric **Wilcoxon signed-rank test** across all six pairs of the four backbones, with **Holm–Bonferroni correction** for the multiple comparisons — standard practice to avoid inflating the false-positive rate from testing six hypotheses at once.
+Architectures are ranked on this metric using a paired, non-parametric **Wilcoxon signed-rank test** across all six pairs of the four backbones, with **Holm–Bonferroni correction** for the multiple comparisons — standard practice to avoid inflating the false-positive rate from testing six hypotheses at once. The binary pointing-game outcome is not significance-tested; it is reported descriptively with a bootstrap interval.
 
 ---
 
@@ -431,14 +431,14 @@ Architectures are ranked on this metric using a paired, non-parametric **Wilcoxo
 
 Evaluated on an identical, held-out 319-row test split (never seen during training of either model):
 
-| Architecture | Single-input accuracy [95% CI] | AUC [95% CI] | vs. dual-input teacher (McNemar p) |
+| Architecture | Single-input accuracy [95% CI] | AUC [95% CI] | Δ acc. vs. dual-input teacher [paired 95% CI] |
 |---|---|---|---|
-| **DenseNet121** | **0.7524** [0.705–0.799] | **0.8390** [0.796–0.879] | p = 0.254 (not significant) |
-| VGG-16 | 0.7273 [0.677–0.774] | 0.8328 [0.789–0.873] | p = 0.445 (not significant) |
-| EfficientNet-B2 | 0.7147 [0.664–0.765] | 0.8133 [0.767–0.858] | p = 0.064 (not significant) |
-| ResNet-50 | 0.7022 [0.652–0.749] | 0.7939 [0.744–0.840] | p = 0.598 (not significant) |
+| **DenseNet121** | **0.7524** [0.705–0.799] | **0.8390** [0.796–0.879] | −0.0345 [−0.088, +0.019] (spans zero) |
+| VGG-16 | 0.7273 [0.677–0.774] | 0.8328 [0.789–0.873] | −0.0251 [−0.078, +0.034] (spans zero) |
+| EfficientNet-B2 | 0.7147 [0.664–0.765] | 0.8133 [0.767–0.858] | −0.0596 [−0.122, +0.003] (spans zero, marginal) |
+| ResNet-50 | 0.7022 [0.652–0.749] | 0.7939 [0.744–0.840] | −0.0188 [−0.075, +0.038] (spans zero) |
 
-**DenseNet121** is the best-performing deployable (single-input) model. For every architecture, the accuracy gap to its non-deployable dual-input teacher is *not* statistically significant at this sample size — the core deployability claim of this thesis: giving up the ground-truth lesion crop at inference time costs nothing detectable.
+**DenseNet121** is the best-performing deployable (single-input) model. For every architecture, the accuracy gap to its non-deployable dual-input teacher has a paired confidence interval spanning zero — the core deployability claim of this thesis: giving up the ground-truth lesion crop at inference time costs nothing detectable at this sample size. Note that the single-input models run at 384 × 640 while the teacher was trained at 224², so the comparison holds the test split constant but not the input resolution.
 
 ---
 

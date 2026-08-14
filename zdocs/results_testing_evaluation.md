@@ -2,7 +2,7 @@
 
 > **Scope note.** This document covers three chronological experiments on the hi-res single-input mammogram classifier. All numbers, tables, and figures are pulled directly from each experiment's saved result files, not re-derived or estimated.
 >
-> - **Experiment 1 — Baseline Architecture Comparison** (`notebooks/experiment_1_baseline/`) trains and compares four CNN backbones under an identical recipe to decide *which* single-input architecture to deploy, and confirms that dropping the ground-truth lesion crop at inference costs no statistically detectable accuracy.
+> - **Experiment 1 — Baseline Architecture Comparison** (`notebooks/experiment_1_baseline/`) trains and compares four CNN backbones under an identical recipe to decide *which* single-input architecture to deploy, and quantifies how much accuracy is given up by dropping the ground-truth lesion crop at inference.
 > - **Experiment 2 — Sensitivity Optimization** (`notebooks/experiment_2_optimization/sensitivity_threshold_adjustment.ipynb`) takes Experiment 1's winning checkpoint (DenseNet121) as fixed and asks a narrower, downstream question: at the model's default 0.5 cutoff, sensitivity trails specificity — can the decision cutoff be moved, with no retraining, to better fit a cancer-screening deployment where a missed malignancy is costlier than a false alarm?
 > - **Experiment 3 — Explainability Evaluation** (`notebooks/explainability/gradcam_validation.ipynb`) asks whether the model's Grad-CAM explanations actually point at the lesion, scored against CBIS-DDSM's expert ROI masks on the same 319-image test split, for all four architectures.
 >
@@ -102,19 +102,21 @@ DenseNet121 was carried forward into Experiment 2 as the deployment candidate on
 
 **Deployability comparison (single-input vs. dual-input).** Table 4.6 restates the core deployability result from [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) §5: how much accuracy is given up by dropping the ground-truth lesion crop at inference time.
 
-**Table 4.6.** Cost of dropping the crop at inference, controlled comparison on the identical 319-row test split.
+**Table 4.6.** Cost of dropping the crop at inference, controlled comparison on the identical 319-row test split. The Δ accuracy interval is a paired bootstrap 95% CI (2000 resamples).
 
-| Architecture | Single-input acc. | Dual-input acc. | Δ accuracy [95% CI] | McNemar p |
+| Architecture | Single-input acc. | Dual-input acc. | Δ accuracy [paired 95% CI] | Interval includes zero |
 |---|---|---|---|---|
-| DenseNet121 | 0.7524 | 0.7868 | −0.0345 [−0.088, +0.019] | 0.254 |
-| VGG-16 | 0.7273 | 0.7524 | −0.0251 [−0.078, +0.034] | 0.445 |
-| EfficientNet-B2 | 0.7147 | 0.7743 | −0.0596 [−0.122, +0.003] | 0.064 |
-| ResNet-50 | 0.7022 | 0.7210 | −0.0188 [−0.075, +0.038] | 0.598 |
+| DenseNet121 | 0.7524 | 0.7868 | −0.0345 [−0.088, +0.019] | Yes |
+| VGG-16 | 0.7273 | 0.7524 | −0.0251 [−0.078, +0.034] | Yes |
+| EfficientNet-B2 | 0.7147 | 0.7743 | −0.0596 [−0.122, +0.003] | Yes (marginal) |
+| ResNet-50 | 0.7022 | 0.7210 | −0.0188 [−0.075, +0.038] | Yes |
 
 **Figure 4.2.** Left: test accuracy of the dual-input (non-deployable) model vs. the single-input model at the old 224² cache vs. the current 384×640 cache, against the majority-class floor. Center: accuracy gap lost by dropping the crop. Right: validation ROC-AUC training curves for all four single-input architectures.
 ![Hi-res vs dual-input comparison](../notebooks/experiment_1_baseline/results/hires_comparison_control_gap.png)
 
-All four McNemar p-values are ≥ 0.05: **no architecture shows a statistically detectable accuracy loss from dropping the crop.** This null result is the central quantitative evidence for the thesis's deployability argument, and it is what makes DenseNet121's single-input checkpoint — not just its accuracy number — a legitimate artifact to carry forward into Experiment 2.
+Every architecture's paired confidence interval spans zero: **no architecture shows a detectable accuracy loss from dropping the crop.** The single-input model's accuracy is lower in each case, but never by enough to separate it from its dual-input counterpart at this sample size. This is the central quantitative evidence for the thesis's deployability argument, and it is what makes DenseNet121's single-input checkpoint — not just its accuracy number — a legitimate artifact to carry forward into Experiment 2.
+
+Two limits on how far this result can be pushed. First, an interval that includes zero is evidence of *undetectability*, not of equivalence — DenseNet121's CI still admits a genuine 8.8-point loss, and EfficientNet-B2's upper bound sits at +0.003, barely clearing zero. Second, the two compared models differ in **two** respects, not one: the single-input model runs at 384 × 640 while the dual-input teacher was trained at 224². The crop advantage and the resolution advantage push in opposite directions and roughly cancel, so the defensible reading is *a hi-res single-input model performs on par with a low-res dual-input model*, rather than the stronger *dropping the crop is free*.
 
 **Experiment 2 — decision threshold.** At its default 0.5 threshold, DenseNet121 is more likely to miss a malignant case than to raise a false alarm (sensitivity 72.5% < specificity 77.3%, Table 4.5). In a cancer-screening context a false negative is more costly than a false positive, so Experiment 2 asks whether the decision cutoff — not the model — can be adjusted to favor sensitivity, without retraining.
 
@@ -161,25 +163,23 @@ Two candidate thresholds were read directly off this sweep, with no manual tunin
 
 The **absolute IoU and Dice values are low, and are partly a resolution artifact rather than a localization error.** The lesion covers ~1–2.5% of valid pixels, while at 384 × 640 every one of these backbones downsamples by 32 to a 20 × 12 feature grid — so the smallest blob Grad-CAM can draw is roughly one 32 × 32-px cell. A perfectly placed single-cell blob still caps out at a modest IoU. This is why the threshold-free pointing game is the number to lead with in text, and why IoU and Dice should never be quoted without stating τ. Note also that Dice = 2·IoU/(1+IoU): they are one measurement reported two conventional ways, not two agreeing metrics.
 
-**Table 4.9.** Pairwise architecture comparisons, Holm–Bonferroni corrected across the six pairs. Wilcoxon signed-rank for IoU/Dice (continuous, long-tailed); McNemar's exact test for the paired binary pointing game. All four architectures scored the identical images in the identical order, so all tests are paired.
+**Table 4.9.** Pairwise architecture comparisons on the continuous overlap metrics, Wilcoxon signed-rank, Holm–Bonferroni corrected across the six pairs. All four architectures scored the identical images in the identical order, so every comparison is paired. IoU and Dice are one measurement reported two ways and agree on all six verdicts; both are shown for completeness.
 
-| Metric | Comparison | Δ | p (Holm-adjusted) | Significant |
-|---|---|---|---|---|
-| Dice | VGG-16 > DenseNet121 | +0.0518 | 7.3e−07 | **Yes** |
-| Dice | VGG-16 > ResNet-50 | +0.0350 | 1.1e−04 | **Yes** |
-| Dice | VGG-16 > EfficientNet-B2 | +0.0344 | 2.1e−04 | **Yes** |
-| Dice | EfficientNet-B2 > DenseNet121 | +0.0174 | 2.4e−03 | **Yes** |
-| Dice | ResNet-50 > DenseNet121 | +0.0168 | 0.108 | No |
-| Dice | EfficientNet-B2 ≈ ResNet-50 | +0.0006 | 0.860 | No |
-| Pointing | VGG-16 > EfficientNet-B2 | +8.15 pp | 3.3e−04 | **Yes** |
-| Pointing | VGG-16 > ResNet-50 | +7.84 pp | 2.5e−04 | **Yes** |
-| Pointing | VGG-16 > DenseNet121 | +7.21 pp | 3.3e−04 | **Yes** |
-| Pointing | remaining three, mutually | ≤ 0.94 pp | 1.00 | No |
+| Comparison | Δ Dice | p (Holm) | Δ IoU | p (Holm) | Significant |
+|---|---|---|---|---|---|
+| VGG-16 > DenseNet121 | +0.0518 | 7.3e−07 | +0.0410 | 3.6e−07 | **Yes** |
+| VGG-16 > ResNet-50 | +0.0350 | 1.1e−04 | +0.0274 | 6.4e−05 | **Yes** |
+| VGG-16 > EfficientNet-B2 | +0.0344 | 2.1e−04 | +0.0296 | 6.4e−05 | **Yes** |
+| EfficientNet-B2 > DenseNet121 | +0.0174 | 2.4e−03 | +0.0113 | 2.4e−03 | **Yes** |
+| ResNet-50 > DenseNet121 | +0.0168 | 0.108 | +0.0136 | 0.087 | No |
+| EfficientNet-B2 ≈ ResNet-50 | +0.0006 | 0.860 | −0.0022 | 0.996 | No |
 
 **Figure 4.6.** Interpretability ranking across all metrics, with the accuracy ranking alongside.
 ![Interpretability ranking](../notebooks/explainability/figures/interpretability_ranking.png)
 
-**VGG-16 is significantly the most interpretable architecture on every metric, and the other three are statistically indistinguishable from one another** (with the single exception of EfficientNet-B2 over DenseNet121 on Dice). This produces the central tension of Experiment 3: **the best classifier is the worst explainer.** DenseNet121 ranks 1st on accuracy and AUC (Table 4.5) but 4th on mean interpretability rank (3.5 of 4), while VGG-16 ranks 2nd on accuracy and 1st on interpretability (mean rank 1.25). §4.3.4 tabulates this inversion directly.
+The pointing game is reported descriptively rather than tested, since no significance test is applied to it in this chapter. Its ordering agrees with the overlap metrics on the leader — VGG-16 at 16.93% [12.9, 21.0] against 8.78–9.72% for the other three (Table 4.8) — though the bootstrap intervals do overlap slightly at the margin (VGG-16's lower bound of 12.9% against DenseNet121's upper bound of 13.2%), so the pointing-game gap should be read as directional support for the Wilcoxon result, not as independent evidence of it.
+
+**VGG-16 is significantly the most interpretable architecture on the overlap metrics, and the other three are largely indistinguishable from one another** (with the single exception of EfficientNet-B2 over DenseNet121). This produces the central tension of Experiment 3: **the best classifier is the worst explainer.** DenseNet121 ranks 1st on accuracy and AUC (Table 4.5) but 4th on mean interpretability rank (3.5 of 4), while VGG-16 ranks 2nd on accuracy and 1st on interpretability (mean rank 1.25). §4.3.4 tabulates this inversion directly.
 
 **Table 4.10.** Localization broken down by true class, τ = 0.50.
 
@@ -246,7 +246,7 @@ flowchart TD
     subgraph P1["Experiment 1 - Baseline Architecture Comparison"]
         A["Data-integrity testing\n(patient-level leakage checks,\nimage path resolution)"] --> B["Model unit validation\n(backbone spatial-shape assertions)"]
         B --> C["System-level evaluation\n(held-out 319-image test set,\nnever used in training/tuning)"]
-        C --> D["Statistical acceptance testing\n(McNemar test: single-input\nvs. dual-input, per architecture)"]
+        C --> D["Statistical acceptance testing\n(paired bootstrap CI: single-input\nvs. dual-input, per architecture)"]
     end
     D --> H{"Deployable checkpoint selected:\nDenseNet121 @ t=0.50"}
     H --> P2
@@ -261,7 +261,7 @@ flowchart TD
     N --> P3
     subgraph P3["Experiment 3 - Explainability Evaluation"]
         O["Instrument validation\n(chance floor, geometry round-trip,\nspatial correspondence, fast-sweep\nvs. naive agreement)"] --> Q["Localization scoring\n(IoU, Dice, Pointing Game vs.\nexpert ROI, 4 architectures)"]
-        Q --> R["Paired acceptance testing\n(Wilcoxon + McNemar exact,\nHolm-Bonferroni corrected)"]
+        Q --> R["Paired acceptance testing\n(Wilcoxon signed-rank,\nHolm-Bonferroni corrected)"]
     end
     R --> S{"VGG-16 most interpretable;\nbest classifier is worst explainer"}
 ```
@@ -276,10 +276,10 @@ flowchart TD
 |---|---|---|---|---|---|
 | TC01 | Patient-level leakage check | Train/test patient ID sets after `StratifiedGroupKFold` split | Zero patient ID overlap between splits | Zero overlap confirmed | Pass |
 | TC02 | Backbone spatial-shape assertion | Each of the 4 backbones' pre-pool feature map at 384×640 input | Feature map shape consistent with `feat_dim` and expected spatial resolution | Assertion passed for all 4 architectures | Pass |
-| TC03 | Deployability equivalence — DenseNet121 | Single-input vs. dual-input predictions, 319-image test set | No significant accuracy gap (McNemar p ≥ 0.05) | p = 0.254 | Pass |
-| TC04 | Deployability equivalence — VGG-16 | same as TC03 | p ≥ 0.05 | p = 0.445 | Pass |
-| TC05 | Deployability equivalence — EfficientNet-B2 | same as TC03 | p ≥ 0.05 | p = 0.064 | Pass |
-| TC06 | Deployability equivalence — ResNet-50 | same as TC03 | p ≥ 0.05 | p = 0.598 | Pass |
+| TC03 | Deployability equivalence — DenseNet121 | Single-input vs. dual-input predictions, 319-image test set | Paired 95% CI of Δ accuracy includes zero | −0.0345 [−0.088, +0.019] | Pass |
+| TC04 | Deployability equivalence — VGG-16 | same as TC03 | CI includes zero | −0.0251 [−0.078, +0.034] | Pass |
+| TC05 | Deployability equivalence — EfficientNet-B2 | same as TC03 | CI includes zero | −0.0596 [−0.122, +0.003] | Pass (marginal) |
+| TC06 | Deployability equivalence — ResNet-50 | same as TC03 | CI includes zero | −0.0188 [−0.075, +0.038] | Pass |
 | TC07 | Checkpoint weight-integrity verification | `model_state_dict` of both re-thresholded checkpoints vs. source checkpoint | Every tensor identical (`torch.equal` true for every key) | True for both `crossover` and `high_sensitivity` checkpoints | Pass |
 | TC08 | Crossover accuracy-neutrality check | Bootstrap 95% CI of accuracy at t=0.485 vs. Main's CI at t=0.50 | Overlapping intervals — no detectable accuracy cost | [0.696, 0.790] overlaps [0.705, 0.799] | Pass |
 | TC09 | High-Sensitivity requirement check | Sensitivity vs. specificity at t=0.305 | Sensitivity exceeds specificity, and exceeds Main's sensitivity | 91.3% sensitivity vs. 64.6% specificity (Main: 72.5%) | Pass (see selection-bias caveat, §4.2.2) |
@@ -320,7 +320,7 @@ No external, published CBIS-DDSM benchmark comparison is included here — doing
 | **Proposed system** (DenseNet121, single-input) | Full mammogram only | 0.7524 | 0.8390 | 71.7 |
 | Internal baseline (DenseNet121, dual-input teacher) | Full mammogram + expert-annotated lesion crop | 0.7868 | 0.8655 | (not directly comparable — teacher trained separately, at 224²) |
 
-The ~3.4-point accuracy gap between these two rows is **not statistically significant** (McNemar p = 0.254, Table 4.6) — the proposed system matches its own upper-bound baseline within measurement noise, while requiring strictly less information at inference time.
+The ~3.4-point accuracy gap between these two rows is **not statistically detectable** — its paired 95% confidence interval, [−0.088, +0.019] (Table 4.6), spans zero. The proposed system matches its own upper-bound baseline within measurement noise while requiring strictly less information at inference time, subject to the two limits stated in §4.2.2 (undetectability is not equivalence, and the two models differ in input resolution as well as in crop availability).
 
 **(b) Experiment 2: existing (default) configuration vs. proposed threshold configurations.**
 
