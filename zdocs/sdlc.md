@@ -1,108 +1,79 @@
-# Software Development Life Cycle (SDLC)
+# SDLC (Software Development Life Cycle)
 
 ## Selection of the Development Model
 
-The development of the proposed explainable deep learning system follows the **Iterative Model** as its governing framework, supplemented by the **Incremental Model** for the web-based application layer.
+The development of the proposed explainable deep learning system follows the **Iterative Model** as its governing framework.
 
 The Iterative Model is the appropriate choice because this is **experimental research rather than conventional software construction**. In a typical software project, requirements can be specified in advance and the finished product judged against them. In a deep learning study this is not possible: the achievable accuracy, the resolution the lesions demand, the behavior of the explanation method, and even which network architecture will perform best are **not knowable before they are measured**. Each of these becomes visible only by building a version, evaluating it, and examining what the evaluation reveals. The requirements are therefore discovered through the development process rather than fixed at its start, which is precisely the condition the Iterative Model exists to handle.
 
-The web-based application, by contrast, has requirements that *can* be specified in advance — a user must be able to sign in, upload a mammogram, view a result, and review past scans. These are independent capabilities that can each be built, tested, and delivered in working order before the next is begun, which is the condition the Incremental Model addresses.
-
-| | Research and Model Development | Web Application |
-|---|---|---|
-| **Model** | Iterative | Incremental |
-| **Requirements** | Discovered by measurement | Specifiable in advance |
-| **Each cycle produces** | A revised, better-performing model | A new working feature |
-| **Cycle ends when** | Evaluation criteria are met | The feature is complete and tested |
-| **Direction** | Refines the *same* deliverable repeatedly | Adds *new* pieces to a growing whole |
+In this study the iteration takes a specific form: **the build-and-measure cycle is repeated across a defined set of candidates, and the optimal candidate is selected from the measured results.** The candidates differ from one experiment to the next — four network architectures in Experiment 1, one hundred ninety-eight decision thresholds in Experiment 2, and four sets of visual explanations in Experiment 3 — but the procedure is identical in each case: one candidate is configured, evaluated under conditions held constant, and recorded; the cycle then repeats with the next candidate; and when the candidate set is exhausted, the best-performing option is selected by a rule fixed in advance. No candidate is dismissed on assumption, and none is chosen by inspection. This exhaustive, systematic sweep is what makes the selection defensible rather than arbitrary.
 
 ---
 
-## Iterative Model: Research and Model Development
-
-### The Iterative Cycle
+## The Iterative Cycle
 
 Each iteration passes through six phases, and the sixth phase decides whether the cycle repeats.
 
-**Phase 1 — Planning and Criteria Definition.** The objective of the iteration is fixed in advance, together with the criterion that will judge it. Defining the criterion *before* running the iteration is essential in this study: a threshold or metric chosen after inspecting results would be reporting the best of many tries rather than an honest measurement.
+**Phase 1: Planning and Criteria Definition.** The candidate set to be swept is enumerated and the criterion that will rank its members is fixed in advance. Defining the criterion before running the sweep is essential in this study: a threshold or metric chosen after inspecting results would be reporting the best of many tries rather than an honest measurement.
 
-**Phase 2 — Data Preparation.** Mammography images are converted to a standard format, labeled, paired with their expert lesion outlines, and divided into training, validation, and test subsets grouped by patient. Images are scaled to a fixed canvas with aspect ratio preserved, and training images are augmented. Where an iteration changes the input resolution or the data handling, this phase is re-executed and the image cache is rebuilt.
+**Phase 2: Data Preparation.** Mammography images are converted to a standard format, labeled, paired with their expert lesion outlines, and divided into training, validation, and test subsets grouped by patient. Images are scaled to a fixed canvas with aspect ratio preserved, and training images are augmented. Where an iteration changes the input resolution or the data handling, this phase is re-executed and the image cache is rebuilt.
 
-**Phase 3 — Design.** The network architecture, training configuration, loss function, and any structural change under test for this iteration are specified. All settings not under test are held fixed at their previous values, so that any measured difference can be attributed to the change actually being evaluated.
+**Phase 3: Design.** The current candidate is specified — the network architecture, training configuration, loss function, or decision rule under evaluation in this pass of the cycle. All settings not under test are held fixed at their previous values, so that any measured difference can be attributed to the candidate actually being evaluated rather than to an incidental change.
 
-**Phase 4 — Implementation and Training.** The models are trained under the specified configuration. Where several architectures are compared, all are trained under an identical recipe so that the comparison remains controlled.
+**Phase 4: Implementation and Training.** The candidate is built and trained under the specified configuration. Where several architectures are compared, all are trained under an identical recipe so that the comparison remains controlled.
 
-**Phase 5 — Testing and Evaluation.** The trained models are evaluated on the held-out test set using accuracy, sensitivity, specificity, F1-score, and AUC-ROC, each reported with a confidence interval. Grad-CAM heatmaps are generated and scored against the expert lesion outlines to measure whether the model's attention falls on clinically relevant tissue.
+**Phase 5: Testing and Evaluation.** The candidate is evaluated on the held-out test set using accuracy, sensitivity, specificity, F1-score, and AUC-ROC, each reported with a confidence interval. Grad-CAM heatmaps are generated and scored against the expert lesion outlines to measure whether the model's attention falls on clinically relevant tissue. The result is recorded alongside those of every candidate already evaluated.
 
-**Phase 6 — Review and Decision.** Results are examined against the criteria set in Phase 1. If both classification performance and interpretability are acceptable, the iteration is accepted and the model advances. If either falls short, the review identifies *which* phase caused the shortfall — preprocessing, architecture, hyperparameters, or the decision rule — and the next iteration is planned to address that specific cause rather than to change several things at once.
+**Phase 6: Review and Decision.** The recorded results are examined against the criteria set in Phase 1. If candidates remain unevaluated, the cycle returns to Phase 3 and the next one is configured. Once the candidate set is exhausted, the best performer is selected by the pre-defined rule and advances. If the entire set fails to meet the acceptance criteria, the review identifies which phase caused the shortfall — preprocessing, architecture, hyperparameters, or the decision rule — and a new sweep is planned to address that specific cause rather than changing several things at once.
+
+The **return paths are distinct, and which one is taken carries meaning.** The ordinary path returns to Phase 3 to configure the next candidate in the sweep; this is the loop that drives each experiment to completion. A shortfall traced to input resolution or data handling returns the cycle to Phase 2 and forces the image cache to be rebuilt. A shortfall traced only to the decision rule is corrected within Phase 5 itself, without retraining anything at all — the model's weights, its predictions, and its ROC curve are all left untouched while only the cutoff moves.
+
+**Figure 2. SDLC for Model Training**
 
 ```mermaid
 flowchart TD
     START(["Start"]) --> P1
 
-    P1["<b>Phase 1</b><br/>Planning and<br/>Criteria Definition"]
+    P1["<b>Phase 1</b><br/>Planning and Criteria Definition<br/><i>enumerate the candidate set,<br/>fix the selection rule</i>"]
     P2["<b>Phase 2</b><br/>Data Preparation<br/><i>convert, label, split by patient,<br/>standardize, augment</i>"]
-    P3["<b>Phase 3</b><br/>Design<br/><i>architecture, configuration,<br/>loss function</i>"]
-    P4["<b>Phase 4</b><br/>Implementation<br/>and Training"]
+    P3["<b>Phase 3</b><br/>Design<br/><i>configure the current candidate;<br/>hold all else constant</i>"]
+    P4["<b>Phase 4</b><br/>Implementation and Training<br/><i>build the candidate under<br/>an identical recipe</i>"]
     P5["<b>Phase 5</b><br/>Testing and Evaluation<br/><i>classification metrics +<br/>Grad-CAM localization scores</i>"]
-    P6{"<b>Phase 6</b><br/>Review:<br/>criteria met?"}
+    P6{"<b>Phase 6</b><br/>Review and<br/>Decision"}
 
     P1 --> P2 --> P3 --> P4 --> P5 --> P6
-    P6 -->|"No — preprocessing<br/>is the limiting factor"| P2
-    P6 -->|"No — architecture or<br/>configuration at fault"| P3
-    P6 -->|"No — decision rule<br/>needs calibration"| P5
-    P6 -->|"<b>Yes</b>"| DONE(["Model accepted<br/>and deployed"])
+    P6 ==>|"<b>candidates remain —<br/>evaluate the next one</b>"| P3
+    P6 -->|"all candidates fail;<br/>data is the limiting factor"| P2
+    P6 -->|"decision rule needs<br/>recalibration only"| P5
+    P6 -->|"<b>candidate set exhausted —<br/>select the best performer</b>"| DONE(["Optimal model<br/>selected and deployed"])
 
     style P6 fill:#fdf3d8,stroke:#c9a227
     style DONE fill:#e9f5ec,stroke:#5aa06e
     style START fill:#eeeeee,stroke:#888888
 ```
 
-The three distinct return paths matter: the review does not simply say "try again," it identifies which phase to re-enter. An accuracy ceiling caused by input resolution returns the cycle to Phase 2; a poorly performing backbone returns it to Phase 3; a misaligned decision cutoff is corrected within Phase 5 without retraining at all.
+The heavy arrow from Phase 6 back to Phase 3 is the sweep loop, and it is the path taken most often — it carries the cycle through every candidate in turn before any selection is made.
 
 ---
 
-### Documented Iterations
+## Application of the Cycle to the Three Experiments
 
-The study passed through the following iterations, each triggered by a specific finding from the previous evaluation. Four generations of model checkpoints were retained as evidence of this progression.
+The same six-phase cycle governs all three experiments; only the candidate set and the selection rule change.
 
-**Iteration 1 — Baseline establishment.** Initial models were trained on a standard square input canvas to establish that the task was learnable at all and to produce a first performance reading. *Outcome:* a working baseline, and confirmation that the models cleared the majority-class floor.
+**Experiment 1 — Architecture selection.** The candidate set is four pretrained network architectures. Each is trained as a full pass through Phases 3 to 5 under a configuration held identical in every respect — same input size, batch size, learning-rate schedule, random seed, and stopping rule — because holding everything constant except the network itself is what licenses attributing the observed differences to the architecture. After all four have been trained and evaluated, the best performer on accuracy and AUC-ROC is selected as the baseline architecture. This is the most expensive sweep in the study, each pass costing a substantial amount of GPU time.
 
-**Iteration 2 — Data integrity correction.** Review of the dataset's own published train/test partition revealed that the same patients appeared on both sides of the split. Because a single patient contributes multiple images, this would have allowed the model to recognize patients at test time and report inflated accuracy. *Change:* all splits were discarded and rebuilt from scratch using patient-grouped, label-stratified partitioning. *Outcome:* a leak-free evaluation basis, verified by confirming zero patient overlap between every pair of subsets.
+**Experiment 2 — Decision threshold optimization.** The candidate set is one hundred ninety-eight decision cutoffs spanning the full probability range. Each is applied to the predictions already saved in Experiment 1, and accuracy, sensitivity, specificity, and F1-score are recomputed at every cutoff. Because the model is never retrained and no new inference is performed, each pass through the loop costs almost nothing, and the entire sweep completes in seconds. The optimal cutoff is then selected by a rule fixed in advance rather than by inspecting the curve — one cutoff defined structurally as the smallest change that reverses the sensitivity/specificity imbalance, and one chosen to maximize correct classification among cutoffs that favor sensitivity.
 
-**Iteration 3 — Deployability restructuring.** The initial design required an expert lesion crop as input, which a clinician would never possess. *Change:* the two-stage teacher/student design was introduced, in which a crop-fed teacher guides a full-image-only student through knowledge distillation. *Outcome:* a deployable single-input model, later confirmed to lose no detectable accuracy relative to its crop-fed counterpart.
+**Experiment 3 — Explainability comparison.** The candidate set is the visual explanations produced by all four architectures. Grad-CAM heatmaps are generated for every test image under each model and scored against the expert lesion outlines using overlap agreement, pointing accuracy, and attention concentration. A secondary sweep over nineteen binarization thresholds confirms that the resulting ranking is a property of the models rather than an artifact of a single threshold choice. The most interpretable architecture is then identified by paired statistical comparison across all pairs.
 
-**Iteration 4 — Hyperparameter search.** A six-phase sequential search tuned one axis at a time — learning rate, weight decay, scheduler, augmentation strength, class-imbalance handling, and optimizer — each phase fixing the previous phase's winner before proceeding. *Outcome:* the baseline configuration proved to be at a local optimum, with no phase improving on it. This is a negative result, but a useful one: it established that subsequent performance gains would have to come from the data or the architecture rather than from further tuning.
+| Experiment | Candidate set | Size | Selection rule | Cost per pass |
+|---|---|---|---|---|
+| 1 — Architecture | Pretrained network architectures | 4 | Highest accuracy and AUC-ROC | Hours of GPU time |
+| 2 — Threshold | Decision cutoffs from 0.01 to 0.995 | 198 | Fixed rules favoring sensitivity | Milliseconds, CPU only |
+| 3 — Explainability | Sets of Grad-CAM explanations | 4 (× 19 thresholds) | Best localization against expert outlines | Minutes of GPU time |
 
-**Iteration 5 — Input resolution rebuild.** Evaluation of Grad-CAM output revealed that at the original input size, the median lesion measured roughly 19 × 10 pixels — smaller than a single cell of the network's final feature grid. This imposed a hard ceiling on *both* classification accuracy and explanation quality: a lesion smaller than one grid cell cannot be localized even in principle. *Change:* the entire image cache was rebuilt at a larger, non-square resolution matching the median mammogram's proportions, enlarging the median lesion to roughly 35 × 34 pixels. *Outcome:* the study's single largest improvement, and the clearest illustration of why an iterative approach was necessary — this limitation was invisible until Grad-CAM output was examined.
+---
 
-**Iteration 6 — Decision threshold calibration.** Evaluation showed the selected model's sensitivity trailing its specificity, meaning it missed malignancies more readily than it raised false alarms — the wrong balance for screening. *Change:* the decision cutoff was swept across its full range and recalibrated. *Outcome:* sensitivity raised substantially with no retraining and negligible computational cost. This iteration is notable for touching only Phase 5; the model itself was left entirely unmodified.
+## Summary
 
-**Iteration 7 — Explainability evaluation.** Explanations were scored quantitatively against expert lesion outlines across all architectures. *Outcome:* explanations were confirmed to localize well above chance, but the evaluation also revealed that the architecture selected for its classification accuracy produced the *least* faithful explanations of those compared.
-
-**Proposed next iteration.** The finding from Iteration 7 supplies the trigger for a further cycle: re-entering Phase 3 to reselect the architecture under a combined accuracy-and-interpretability criterion rather than accuracy alone. This is documented as a recommendation rather than executed, and it demonstrates the model working as intended — each evaluation generating the specification for the next iteration.
-
-```mermaid
-flowchart LR
-    I1["<b>1</b><br/>Baseline<br/>established"]
-    I2["<b>2</b><br/>Data integrity<br/>corrected"]
-    I3["<b>3</b><br/>Deployability<br/>restructured"]
-    I4["<b>4</b><br/>Hyperparameters<br/>searched"]
-    I5["<b>5</b><br/>Input resolution<br/>rebuilt"]
-    I6["<b>6</b><br/>Threshold<br/>calibrated"]
-    I7["<b>7</b><br/>Explanations<br/>evaluated"]
-    I8["<b>8</b><br/><i>Architecture<br/>reselection</i><br/>(proposed)"]
-
-    I1 -->|"patient leakage<br/>discovered"| I2
-    I2 -->|"crop unavailable<br/>at deployment"| I3
-    I3 -->|"seeking further<br/>gains"| I4
-    I4 -->|"tuning exhausted;<br/>lesions too small"| I5
-    I5 -->|"sensitivity below<br/>specificity"| I6
-    I6 -->|"are explanations<br/>trustworthy?"| I7
-    I7 -.->|"best classifier is<br/>worst explainer"| I8
-
-    style I8 fill:#f4f1e8,stroke:#a89878,stroke-dasharray: 5 3
-    style I5 fill:#e9f5ec,stroke:#5aa06e
-```
-
-Each arrow is labeled with the finding that triggered the next iteration — none of these were planned at the outset, and each became visible only through evaluation.
+The study adopts the Iterative Model for its research and model development component because the target performance, the best-performing architecture, the optimal decision threshold, and the behavior of the explanation method could not be specified in advance — each was discovered by building a candidate and measuring it. In every experiment the cycle was driven to completion over a defined candidate set rather than stopped at the first acceptable result: four architectures were trained and compared under an identical recipe, one hundred ninety-eight decision thresholds were swept exhaustively, and four sets of explanations were scored against expert annotations. In each case the optimum was selected by a rule fixed before the sweep began. This systematic, exhaustive approach is what allows the study to claim that the chosen architecture, the chosen threshold, and the reported interpretability ranking are the best available options within the space examined, rather than merely the first configurations that happened to work.
