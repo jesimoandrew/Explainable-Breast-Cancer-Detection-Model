@@ -52,6 +52,9 @@ export default function RecordDetails() {
   const malignant = record.result === 'Malignant'
   const analysis = record.analysis || null
   const primary = analysis?.models.find((m) => m.arch === analysis.primaryArch)
+  // The headline verdict stays DenseNet121-driven (primary), but the large
+  // Grad-CAM heatmap on this page is shown from VGG16 specifically.
+  const heatmapModel = analysis?.models.find((m) => m.arch === 'vgg16') || primary
   const groundTruth = analysis?.groundTruth || null
 
   function handleSave() {
@@ -111,14 +114,14 @@ export default function RecordDetails() {
               lesion={record.lesion}
               meta={`Raw scan · ${record.protocol}`}
               onExpand={
-                analysis?.originalImage && primary?.heatmap
+                analysis?.originalImage && heatmapModel?.heatmap
                   ? () => setComparing(true)
                   : undefined
               }
             />
 
             <ScanViewer
-              src={primary?.heatmap}
+              src={heatmapModel?.heatmap}
               alt="Grad-CAM detection heatmap"
               label="AI Detection Heatmap"
               variant="heatmap"
@@ -132,7 +135,7 @@ export default function RecordDetails() {
               meta={
                 <>
                   <Layers size={13} />
-                  Grad-CAM · {primary ? primary.displayName : record.densityGrade}
+                  Grad-CAM · {heatmapModel ? heatmapModel.displayName : record.densityGrade}
                 </>
               }
             />
@@ -141,8 +144,8 @@ export default function RecordDetails() {
           {comparing && (
             <CompareModal
               original={analysis.originalImage}
-              heatmap={primary.heatmap}
-              title={`${record.name} · Original vs ${primary.displayName} Grad-CAM`}
+              heatmap={heatmapModel.heatmap}
+              title={`${record.name} · Original vs ${heatmapModel.displayName} Grad-CAM`}
               onClose={() => setComparing(false)}
             />
           )}
