@@ -12,6 +12,7 @@ Run with:  uv run uvicorn app.server:app --reload --port 8000
 Docs at:   http://localhost:8000/docs
 """
 import io
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -21,7 +22,15 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 
-from app import db, inference
+from app import inference
+
+# ASTRA_DB=sqlite swaps Supabase for a local SQLite file + disk storage (app/db_sqlite.py)
+# so the whole stack runs offline. Start it with `npm run dev:local` in frontend/.
+LOCAL_DB = os.getenv("ASTRA_DB", "").lower() == "sqlite"
+if LOCAL_DB:
+    from app import db_sqlite as db
+else:
+    from app import db
 
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -39,7 +48,7 @@ async def lifespan(_app: FastAPI):
 
     st = db.status()
     if st["connected"]:
-        print("  supabase: connected -- scans will persist")
+        print(f"  {st.get('backend', 'supabase')}: connected -- scans will persist")
         if not st.get("migrated"):
             print("  supabase: scan_predictions missing -- run "
                   "supabase/002_scan_predictions.sql")
@@ -102,6 +111,42 @@ def models():
         "device": str(inference.H.DEVICE),
         "models": [meta[a] for a in inference.ARCHS],
     }
+
+
+# ---------------------------------------------------------------------------
+# local auth + image files -- only with ASTRA_DB=sqlite (Supabase handles both otherwise)
+# ---------------------------------------------------------------------------
+if LOCAL_DB:
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/api/files", StaticFiles(directory=db.FILES_DIR), name="files")
+
+    @app.post("/api/auth/signup")
+    def auth_signup(payload: dict = Body(...)):
+        email, password = payload.get("email", ""), payload.get("password", "")
+        if "@" not in email or len(password) < 6:
+            raise HTTPException(status_code=400,
+                                detail="Enter a valid email and a password of 6+ characters.")
+        if db.sign_up(email, password, payload.get("fullName", "")) is None:
+            raise HTTPException(status_code=409, detail="That email is already registered.")
+        return {"ok": True}
+
+    @app.post("/api/auth/login")
+    def auth_login(payload: dict = Body(...)):
+        session = db.sign_in(payload.get("email", ""), payload.get("password", ""))
+        if session is None:
+            raise HTTPException(status_code=401, detail="Invalid email or password.")
+        return session
+
+    @app.get("/api/auth/me")
+    def auth_me(user_id: str = Depends(current_user)):
+        return db.user_info(user_id)
+
+    @app.post("/api/auth/logout")
+    def auth_logout(authorization: Optional[str] = Header(None)):
+        if authorization and authorization.lower().startswith("bearer "):
+            db.sign_out(authorization.split(" ", 1)[1].strip())
+        return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +233,13 @@ def analyze(file: UploadFile = File(...),
     except Exception as exc:
         # The one setup step that is easy to miss deserves a real instruction
         # rather than PostgREST's "schema cache" wording.
+        if "calibrated_probability" in str(exc):
+            raise HTTPException(
+                status_code=503,
+                detail="Database is missing the calibrated_probability column. Run "
+                       "supabase/003_calibrated_probability.sql in the Supabase SQL "
+                       "Editor, then try again.",
+            )
         if "scan_predictions" in str(exc):
             raise HTTPException(
                 status_code=503,

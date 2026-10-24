@@ -25,3 +25,6 @@ notebooks/explainability/figures/
 *.pt
 *.pth
 
+
+# Local SQLite mode (npm run dev:local)
+local-data/

@@ -7,12 +7,18 @@ classification + Grad-CAM. DenseNet121 is served from the sensitivity-optimized
 checkpoint in notebooks/experiment_2_optimization/checkpoints/, which carries its
 own `decision_threshold` (0.305) in the checkpoint metadata.
 
+Reported probabilities are post-hoc calibrated by temperature scaling; the per-model
+temperatures come from notebooks/experiment_2_optimization/confidence_calibration.ipynb.
+Decisions are still made on the raw probability, so verdicts are unaffected.
+
 No training happens here -- this is the same inference path as app/app.py, just
 factored out so the HTTP layer in app/server.py and the Streamlit demo can share
 it.
 """
 import base64
 import io
+import json
+import math
 import os
 import sys
 import threading
@@ -43,6 +49,8 @@ import hires_lib as H  # noqa: E402
 
 CKPT_DIR = ROOT / "models" / "v4_hires_control_gap"
 EXP2_CKPT_DIR = ROOT / "notebooks" / "experiment_2_optimization" / "checkpoints"
+CALIBRATION_PATH = (ROOT / "notebooks" / "experiment_2_optimization" / "results"
+                    / "calibration_temperatures.json")
 
 ARCHS = H.ARCHITECTURES                       # densenet121, resnet50, efficientnet_b2, vgg16
 PRIMARY_ARCH = "densenet121"                  # drives the headline verdict shown in the UI
@@ -72,6 +80,13 @@ def load_models(verbose=True):
     if _MODELS:
         return _MODELS, _META
 
+    # Temperature scaling (fit on the validation split). Without the file, report raw softmax.
+    temperatures = {}
+    if CALIBRATION_PATH.exists():
+        temperatures = {a: v["temperature"] for a, v in json.loads(CALIBRATION_PATH.read_text()).items()}
+    elif verbose:
+        print(f"  WARNING: {CALIBRATION_PATH.name} not found -- confidences are uncalibrated (T=1)")
+
     for arch in ARCHS:
         ckpt_path = CKPT_PATHS[arch]
         if not ckpt_path.exists():
@@ -99,6 +114,7 @@ def load_models(verbose=True):
             "checkpointDir": str(ckpt_path.parent.relative_to(ROOT)).replace("\\", "/"),
             "threshold": float(threshold),
             "thresholdVariant": ck.get("threshold_variant"),
+            "temperature": float(temperatures.get(arch, 1.0)),
             "valAuc": ck.get("val_auc"),
             "testMetrics": ck.get("threshold_test_metrics"),
             "isPrimary": arch == PRIMARY_ARCH,
@@ -106,7 +122,8 @@ def load_models(verbose=True):
         if verbose:
             variant = _META[arch]["thresholdVariant"]
             tag = f" [{variant}]" if variant else ""
-            print(f"  loaded {H.ARCH_DISPLAY_NAMES[arch]:<16} t={threshold:.3f}{tag}  {ckpt_path.name}")
+            print(f"  loaded {H.ARCH_DISPLAY_NAMES[arch]:<16} t={threshold:.3f} "
+                  f"T={_META[arch]['temperature']:.3f}{tag}  {ckpt_path.name}")
 
     return _MODELS, _META
 
@@ -192,12 +209,22 @@ def to_data_uri(pil_img):
 # inference
 # ---------------------------------------------------------------------------
 def explain(model, pil_gray):
-    """Returns (prob_malignant, heatmap_at_original_resolution)."""
+    """Returns (prob_malignant, logit, heatmap_at_original_resolution).
+
+    logit = z1 - z0, recovered as log(p1) - log(p0) from the softmax pair -- exact, and unlike
+    log(p / (1 - p)) it does not lose precision when p is close to 1.
+    """
     ow, oh = pil_gray.size
     x = preprocess(pil_gray).to(H.DEVICE)
     with H.GradCAM(model) as cam_fn:
         cam, probs = cam_fn(x, class_idx=1)
-    return float(probs[0, 1]), H.cam_to_original(cam[0], ow, oh)
+    p0, p1 = (max(float(v), 1e-30) for v in probs[0])
+    return float(probs[0, 1]), math.log(p1) - math.log(p0), H.cam_to_original(cam[0], ow, oh)
+
+
+def calibrate(logit, temperature):
+    """Temperature-scaled p(malignant) = sigmoid(logit / T)."""
+    return 1.0 / (1.0 + math.exp(-logit / temperature))
 
 
 def analyze(pil_gray, file_name=""):
@@ -214,18 +241,23 @@ def analyze(pil_gray, file_name=""):
 
         results = []
         for arch in ARCHS:
-            prob, heat = explain(models[arch], pil_gray)
+            prob, logit, heat = explain(models[arch], pil_gray)
             heat_disp = downscale_for_display(heat, mode="F")
             overlay = make_overlay(orig_display, heat_disp)
 
             threshold = meta[arch]["threshold"]
+            # The decision uses the raw probability against the tuned threshold; temperature
+            # scaling is monotonic, so it would give the same verdict, but this keeps the
+            # 0.305 operating point exactly as validated in experiment 2.
             malignant = prob >= threshold
+            p_cal = calibrate(logit, meta[arch]["temperature"])
             results.append({
                 **meta[arch],
                 "probability": round(prob, 4),
+                "calibratedProbability": round(p_cal, 4),
                 "result": "Malignant" if malignant else "Benign",
-                # confidence in the prediction the model actually made
-                "confidence": round((prob if malignant else 1 - prob) * 100, 1),
+                # calibrated confidence in the prediction the model actually made
+                "confidence": round((p_cal if malignant else 1 - p_cal) * 100, 1),
                 "heatmap": to_data_uri(overlay),
             })
 
@@ -251,6 +283,7 @@ def analyze(pil_gray, file_name=""):
         "primaryArch": PRIMARY_ARCH,
         "result": primary["result"],
         "probability": primary["probability"],
+        "calibratedProbability": primary["calibratedProbability"],
         "confidence": primary["confidence"],
         "threshold": primary["threshold"],
         "models": results,

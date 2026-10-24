@@ -13,6 +13,15 @@ import {
   Share,
 } from '../components/Icons'
 
+// Display bands over the calibrated confidence in the predicted class (0-100). The
+// probabilities themselves are temperature-scaled (confidence_calibration.ipynb); these
+// cut-offs only choose the wording.
+function certaintyTier(confidence) {
+  if (confidence >= 85) return { key: 'high', label: 'High certainty' }
+  if (confidence >= 65) return { key: 'moderate', label: 'Moderate certainty' }
+  return { key: 'low', label: 'Low certainty' }
+}
+
 export default function RecordDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -56,6 +65,11 @@ export default function RecordDetails() {
   // Grad-CAM heatmap on this page is shown from VGG16 specifically.
   const heatmapModel = analysis?.models.find((m) => m.arch === 'vgg16') || primary
   const groundTruth = analysis?.groundTruth || null
+  // Scans saved before calibration have no calibrated value -- show no confidence rather
+  // than the raw softmax.
+  const pMalignant = primary?.calibratedProbability ?? null
+  const confidence = pMalignant == null ? null : primary.confidence
+  const tier = confidence == null ? null : certaintyTier(confidence)
 
   function handleSave() {
     updateRecord(record.id, { notes, notesEdited: 'just now' })
@@ -197,6 +211,18 @@ export default function RecordDetails() {
                           <dt>threshold</dt>
                           <dd>{m.threshold.toFixed(3)}</dd>
                         </div>
+                        {m.calibratedProbability != null && (
+                          <>
+                            <div>
+                              <dt>calibrated p</dt>
+                              <dd>{m.calibratedProbability.toFixed(3)}</dd>
+                            </div>
+                            <div>
+                              <dt>confidence</dt>
+                              <dd>{m.confidence.toFixed(1)}%</dd>
+                            </div>
+                          </>
+                        )}
                       </dl>
                       {m.thresholdVariant && (
                         <p className="arch-tile__variant">{m.thresholdVariant}</p>
@@ -241,6 +267,41 @@ export default function RecordDetails() {
               {malignant ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
             </div>
             <h2 className="verdict-card__value">{record.result}</h2>
+
+            {tier && (
+              <div className="confidence">
+                <div className="confidence__row">
+                  <span className="confidence__label">Probability of malignancy</span>
+                  <span className="confidence__value">{Math.round(pMalignant * 100)}%</span>
+                </div>
+                <div
+                  className="confidence__meter"
+                  role="meter"
+                  aria-label="Calibrated probability of malignancy"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(pMalignant * 100)}
+                >
+                  <span style={{ width: `${pMalignant * 100}%` }} />
+                </div>
+                <div className="confidence__row">
+                  <span className={`certainty-chip certainty-chip--${tier.key}`}>
+                    {tier.label}
+                  </span>
+                  <span className="confidence__source">
+                    {confidence.toFixed(1)}% confident · calibrated
+                  </span>
+                </div>
+                {tier.key === 'low' && (
+                  <p className="confidence__note">
+                    {malignant
+                      ? 'The model is uncertain. This scan was flagged by the high-sensitivity screening threshold so that borderline cases are not missed. It is a prompt for radiologist review, not a diagnosis.'
+                      : 'The model is uncertain about this result. Consider a follow-up review.'}
+                  </p>
+                )}
+              </div>
+            )}
+
             <p className="verdict-card__text">{record.summary}</p>
           </section>
 

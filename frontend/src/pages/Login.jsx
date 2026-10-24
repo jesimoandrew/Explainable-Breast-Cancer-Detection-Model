@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
-import { isSupabaseConfigured } from '../supabase'
+import { isLocalDb, isSupabaseConfigured } from '../supabase'
 import { checkHealth } from '../api'
 import Footer from '../components/Footer'
 import {
@@ -52,7 +52,11 @@ export default function Login() {
       } else {
         await signUp(email, password, fullName)
         // With email confirmations on, there is no session yet.
-        setNotice('Account created. Check your inbox to confirm, then sign in.')
+        setNotice(
+          isLocalDb
+            ? 'Account created. Sign in to continue.'
+            : 'Account created. Check your inbox to confirm, then sign in.',
+        )
         setTab('login')
       }
     } catch (err) {

@@ -1,0 +1,34 @@
+{
+  "densenet121": {
+    "temperature": 1.123329,
+    "fit_split": "val",
+    "n_fit": 317,
+    "checkpoint": "hires_control_gap_a0.5_densenet121_high_sensitivity_t0.305.pth",
+    "test_ece_before": 0.0586,
+    "test_ece_after": 0.0709
+  },
+  "resnet50": {
+    "temperature": 1.011793,
+    "fit_split": "val",
+    "n_fit": 317,
+    "checkpoint": "hires_control_gap_a0.5_resnet50.pth",
+    "test_ece_before": 0.0826,
+    "test_ece_after": 0.0841
+  },
+  "efficientnet_b2": {
+    "temperature": 1.229915,
+    "fit_split": "val",
+    "n_fit": 317,
+    "checkpoint": "hires_control_gap_a0.5_efficientnet_b2.pth",
+    "test_ece_before": 0.078,
+    "test_ece_after": 0.0515
+  },
+  "vgg16": {
+    "temperature": 1.111623,
+    "fit_split": "val",
+    "n_fit": 317,
+    "checkpoint": "hires_control_gap_a0.5_vgg16.pth",
+    "test_ece_before": 0.0919,
+    "test_ece_after": 0.0839
+  }
+}

@@ -19,6 +19,8 @@
   --danger-line: #f3cdca;
   --success: #157f4f;
   --success-soft: #e8f6ee;
+  --warning: #9a6200;
+  --warning-soft: #fdf3e1;
   /* One ratio for every scan frame -- original, heatmap, arch tiles, ROI -- so
      panels line up. Portrait, because mammograms are (the hi-res cache is
      384x640 = 3:5). Change this one value to reshape every frame at once. */
@@ -1270,6 +1272,65 @@ button { font: inherit; color: inherit; }
 .verdict-card--success .verdict-card__value,
 .verdict-card--success .verdict-card__head svg { color: var(--success); }
 .verdict-card--success .verdict-card__text { color: #1a6b47; }
+
+/* Calibrated confidence -- inherits the verdict colour via currentColor. */
+.confidence {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.6);
+}
+.verdict-card--danger .confidence { color: var(--danger); }
+.verdict-card--success .confidence { color: var(--success); }
+.confidence__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.confidence__label { font-size: 11px; font-weight: 600; color: var(--ink-2); }
+.confidence__value {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.confidence__meter {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.confidence__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+}
+.confidence__source { font-size: 10.5px; color: var(--muted); }
+.confidence__note {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.certainty-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+/* Low certainty is deliberately neutral, not alarm-red: it de-escalates a borderline call. */
+.certainty-chip--low { background: var(--line-2); color: var(--muted); }
+.certainty-chip--moderate { background: var(--warning-soft); color: var(--warning); }
+.certainty-chip--high { background: var(--white); color: var(--ink); border: 1px solid var(--line); }
 
 .export-card { padding: 6px; }
 .link-row {

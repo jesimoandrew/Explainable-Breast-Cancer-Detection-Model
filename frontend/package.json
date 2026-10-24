@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "uv run --directory .. uvicorn app.server:app --port 8000 --reload --reload-dir app",
+    "dev:api:sqlite": "uv run --directory .. uvicorn app.server:app --port 8000 --reload --reload-dir app --env-file .env.sqlite",
+    "dev:ui:sqlite": "vite --mode sqlite",
+    "dev:local": "concurrently -k -n api,ui -c magenta,cyan --handle-input \"npm:dev:api:sqlite\" \"npm:dev:ui:sqlite\"",
     "dev:all": "concurrently -k -n api,ui -c magenta,cyan --handle-input \"npm:dev:api\" \"npm:dev\"",
     "build": "vite build",
     "preview": "vite preview",

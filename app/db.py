@@ -132,6 +132,9 @@ def _pred_to_model(p):
         "arch": p["arch"],
         "displayName": p["display_name"],
         "probability": float(p["probability"]),
+        # null for scans saved before temperature scaling (supabase/003)
+        "calibratedProbability": (float(p["calibrated_probability"])
+                                  if p.get("calibrated_probability") is not None else None),
         "threshold": float(p["threshold"]),
         "result": p["result"],
         "confidence": float(p["confidence"]),
@@ -155,6 +158,7 @@ def _row_to_record(row, preds=None):
             "device": None,
             "originalImage": row.get("image_url"),
             "probability": primary["probability"] if primary else 0.0,
+            "calibratedProbability": primary["calibratedProbability"] if primary else None,
             "threshold": primary["threshold"] if primary else 0.5,
             "result": row["result"],
             "confidence": float(row.get("confidence_score") or 0),
@@ -188,10 +192,18 @@ def _summary_for(row, primary):
     if not primary:
         return ""
     name, p, t = primary["displayName"], primary["probability"], primary["threshold"]
+    p_cal = primary.get("calibratedProbability")
+    if p_cal is None:   # scan saved before calibration -- keep the original wording
+        if row["result"] == "Malignant":
+            return (f"{name} flags this study as malignant at p={p:.3f} "
+                    f"(threshold {t:.3f}). Radiologist review required.")
+        return f"{name} returns p(malignant)={p:.3f}, below the {t:.3f} decision threshold."
     if row["result"] == "Malignant":
-        return (f"{name} flags this study as malignant at p={p:.3f} "
-                f"(threshold {t:.3f}). Radiologist review required.")
-    return f"{name} returns p(malignant)={p:.3f}, below the {t:.3f} decision threshold."
+        return (f"{name} estimates a {p_cal:.0%} probability of malignancy (calibrated) and "
+                f"flags this study at its {t:.3f} screening threshold. This is a prompt for "
+                f"radiologist review, not a diagnosis.")
+    return (f"{name} estimates a {p_cal:.0%} probability of malignancy (calibrated), "
+            f"below its {t:.3f} screening threshold.")
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +269,7 @@ def save_analysis(user_id, image_name, analysis, patient_name=None):
                 "arch": m["arch"],
                 "display_name": m["displayName"],
                 "probability": m["probability"],
+                "calibrated_probability": m["calibratedProbability"],
                 "threshold": m["threshold"],
                 "result": m["result"],
                 "confidence": m["confidence"],
